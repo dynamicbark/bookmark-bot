@@ -6,8 +6,7 @@ import {
   InteractionType,
   RESTPutAPIApplicationCommandsJSONBody,
 } from '@discordjs/core';
-import { searchBackButton } from '../commands/buttons/SearchBack.js';
-import { searchForwardButton } from '../commands/buttons/SearchForward.js';
+import { searchButton } from '../commands/buttons/Search.js';
 import { deleteChatInputCommand, deleteChatInputCommandData } from '../commands/chatInput/Delete.js';
 import { searchChatInputCommand, searchChatInputCommandData } from '../commands/chatInput/Search.js';
 import { showChatInputCommand, showChatInputCommandData } from '../commands/chatInput/Show.js';
@@ -27,8 +26,7 @@ chatInputCommands.set('search', searchChatInputCommand);
 chatInputCommands.set('show', showChatInputCommand);
 chatInputCommands.set('tag', tagChatInputCommand);
 messageContextMenuCommands.set('bookmark', bookmarkMessageContextMenu);
-messageComponentButtonCommands.set('search_back', searchBackButton);
-messageComponentButtonCommands.set('search_forward', searchForwardButton);
+messageComponentButtonCommands.set('search', searchButton);
 
 export async function interactionCreateListener({ data: interaction, api }: { data: APIInteraction; api: API }) {
   // Commands

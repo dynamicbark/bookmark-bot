@@ -15,7 +15,7 @@ import {
   ApplicationIntegrationTypes,
   getUserFromInteraction,
 } from '../../utils/CommandUtils.js';
-import { getUserAvatarUrl, standardizeMessage } from '../../utils/MessageUtils.js';
+import { createEmbedFromBookmark } from '../../utils/MessageUtils.js';
 
 export const searchChatInputCommandData: ApplicationCommand = {
   name: 'search',
@@ -28,7 +28,14 @@ export const searchChatInputCommandData: ApplicationCommand = {
       type: ApplicationCommandOptionType.String,
       name: 'query',
       description: 'The search query to use.',
-      required: true,
+      required: false,
+      max_length: 300,
+    },
+    {
+      type: ApplicationCommandOptionType.String,
+      name: 'tags',
+      description: 'The tags to filter by (space seperated)',
+      required: false,
       max_length: 300,
     },
   ],
@@ -36,12 +43,21 @@ export const searchChatInputCommandData: ApplicationCommand = {
 
 export async function searchChatInputCommand(interaction: APIChatInputApplicationCommandInteraction) {
   // Get the options
-  const query = (
-    interaction.data.options!.filter((opt) => opt.name.toLowerCase() === 'query')[0] as APIApplicationCommandInteractionDataStringOption
-  ).value
-    .replaceAll('`', '')
-    .replaceAll('\n', '')
-    .trim();
+  let queryOption =
+    (
+      interaction.data.options?.filter((opt) => opt.name.toLowerCase() === 'query')[0] as
+        | APIApplicationCommandInteractionDataStringOption
+        | undefined
+    )?.value
+      .replaceAll('`', '')
+      .replaceAll('\n', '')
+      .trim() || '';
+  const tagsOption =
+    (
+      interaction.data.options?.filter((opt) => opt.name.toLowerCase() === 'tags')[0] as
+        | APIApplicationCommandInteractionDataStringOption
+        | undefined
+    )?.value.trim() || '';
   // Defer the reply since it can take some time to process
   await discordClient.api.interactions.defer(interaction.id, interaction.token, {
     flags: MessageFlags.Ephemeral,
@@ -57,23 +73,19 @@ export async function searchChatInputCommand(interaction: APIChatInputApplicatio
       message: true,
     },
   });
-  const matchStartingTags = /^#([a-z0-9:_()]{1,}) ?(?:(?:.|\n)*)/;
+  //const matchStartingTags = /^#([a-z0-9:_()]{1,}) ?(?:(?:.|\n)*)/;
   const tagsToSearch = new Set<string>();
-  let updatedQuery = query.trim();
-  while (true) {
-    const matches = updatedQuery.match(matchStartingTags);
-    if (!matches) {
-      break;
+  for (let tagName of tagsOption.split(' ')) {
+    tagName = tagName.toLowerCase().trim();
+    if (tagName !== '') {
+      tagsToSearch.add(tagName);
     }
-    const foundTag = matches[1];
-    tagsToSearch.add(foundTag);
-    updatedQuery = updatedQuery.substring(`#${foundTag}`.length).trim();
   }
   const foundBookmarks = [];
   for (const bookmark of bookmarks) {
     let shouldStop = false;
     for (const tagName of tagsToSearch) {
-      if (!bookmark.tags.find((t) => t.name === tagName.toLowerCase())) {
+      if (!bookmark.tags.find((t) => t.name === tagName)) {
         shouldStop = true;
         break;
       }
@@ -82,7 +94,7 @@ export async function searchChatInputCommand(interaction: APIChatInputApplicatio
       continue;
     }
     const messageData = JSON.parse(bookmark.message.data!.toString());
-    if (messageData.content.toLowerCase().includes(updatedQuery)) {
+    if (messageData.content.toLowerCase().includes(queryOption)) {
       foundBookmarks.push(bookmark);
     }
   }
@@ -94,62 +106,44 @@ export async function searchChatInputCommand(interaction: APIChatInputApplicatio
     return;
   }
   const bookmarkToShow = foundBookmarks[0];
-  const isFirst = foundBookmarks[0].userBookmarkId === bookmarkToShow.userBookmarkId;
-  const isLast = foundBookmarks.reverse()[0].userBookmarkId === bookmarkToShow.userBookmarkId;
-  // Get the message
-  const foundMessage = await prisma.message.findFirst({
-    where: {
-      id: BigInt(bookmarkToShow.messageId),
-    },
-    include: {
-      author: true,
-    },
-  });
-  if (!foundMessage) {
-    console.error('the message was not found for a bookmark');
-    return;
-  }
-  const storedMessage = standardizeMessage(foundMessage.data!.toString(), Math.floor(bookmarkToShow.updatedAt.getTime() / 1000));
   const components = [];
-  if (!isFirst) {
+  if (foundBookmarks[0].userBookmarkId !== bookmarkToShow.userBookmarkId) {
+    // is first
     components.push({
       type: ComponentType.Button,
       style: ButtonStyle.Primary,
       label: 'Back',
       custom_id: JSON.stringify({
-        t: 'search_back',
+        t: 'search',
+        mode: 'back',
         index: bookmarkToShow.userBookmarkId,
       }),
     });
   }
-  if (!isLast) {
+  if (foundBookmarks.reverse()[0].userBookmarkId !== bookmarkToShow.userBookmarkId) {
+    // is last
     components.push({
       type: ComponentType.Button,
       style: ButtonStyle.Primary,
       label: 'Forward',
       custom_id: JSON.stringify({
-        t: 'search_forward',
+        t: 'search',
+        mode: 'forward',
         index: bookmarkToShow.userBookmarkId,
       }),
     });
   }
+  const bookmarkAuthor = await prisma.user.findFirst({
+    where: {
+      id: BigInt(bookmarkToShow.message.authorId),
+    },
+  });
+  let builtQuery = ([...tagsToSearch].map((tag) => `#${tag}`).join(' ') + ` ${queryOption}`).trim();
   await discordClient.api.interactions.editReply(interaction.application_id, interaction.token, {
-    content: `Search results for \`${query}\`.\n[Jump to message!](https://discord.com/channels/${storedMessage.guild_id || '@me'}/${
-      storedMessage.channel_id
-    }/${storedMessage.id}) (${foundBookmarks.length} result${foundBookmarks.length !== 1 ? 's' : ''})`,
-    embeds: [
-      {
-        author: {
-          name: `${foundMessage.author.username}${foundMessage.author.displayName ? ` (${foundMessage.author.displayName})` : ``}`,
-          icon_url: getUserAvatarUrl(`${foundMessage.author.id}`, foundMessage.author.avatarHash),
-        },
-        description: storedMessage.content,
-        timestamp: storedMessage.timestamp,
-        footer: {
-          text: `#${bookmarkToShow.userBookmarkId}`,
-        },
-      },
-    ],
+    content: `Search results for \`${builtQuery === '' ? '*' : builtQuery}\`. (${foundBookmarks.length} result${
+      foundBookmarks.length !== 1 ? 's' : ''
+    })`,
+    embeds: [createEmbedFromBookmark(bookmarkToShow, bookmarkToShow.message, bookmarkAuthor!, bookmarkToShow.tags)],
     components:
       components.length !== 0
         ? [

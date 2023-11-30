@@ -7,13 +7,17 @@ import {
 } from '@discordjs/core';
 import { discordClient, prisma } from '../../index.js';
 import { getUserFromInteraction } from '../../utils/CommandUtils.js';
-import { getUserAvatarUrl, standardizeMessage } from '../../utils/MessageUtils.js';
+import { createEmbedFromBookmark } from '../../utils/MessageUtils.js';
 
-export async function searchForwardButton(interaction: APIMessageComponentButtonInteraction) {
+export async function searchButton(interaction: APIMessageComponentButtonInteraction) {
   const parsedCustomId = JSON.parse(interaction.data.custom_id);
+  const mode: 'forward' | 'back' = parsedCustomId.mode;
   const index = parsedCustomId.index;
   const foundQuery = interaction.message.content.match(/`(.*)`/gi)![0];
-  const query = foundQuery.substring(1, foundQuery.length - 1) || '';
+  let query = foundQuery.substring(1, foundQuery.length - 1) || '';
+  if (query === '*') {
+    query = '';
+  }
   // Defer the update since it can take some time to process
   await discordClient.api.interactions.deferMessageUpdate(interaction.id, interaction.token, {});
   //
@@ -64,68 +68,58 @@ export async function searchForwardButton(interaction: APIMessageComponentButton
     });
     return;
   }
-  let bookmarkToShow = foundBookmarks
-    .filter((bookmark) => bookmark.userBookmarkId > index) // greater than the current index
-    .sort((a, b) => (a.userBookmarkId > b.userBookmarkId ? 1 : -1))[0];
+  // Get the bookmark to show
+  let bookmarkToShow = undefined;
+  if (mode === 'forward') {
+    bookmarkToShow = foundBookmarks
+      .filter((bookmark) => bookmark.userBookmarkId > index) // greater than the current index
+      .sort((a, b) => (a.userBookmarkId > b.userBookmarkId ? 1 : -1))[0];
+  } else if (mode === 'back') {
+    bookmarkToShow = foundBookmarks
+      .filter((bookmark) => bookmark.userBookmarkId < index) // less than the current index
+      .sort((a, b) => (a.userBookmarkId > b.userBookmarkId ? 1 : -1))
+      .reverse()[0];
+  }
   if (!bookmarkToShow) {
     bookmarkToShow = foundBookmarks[0];
   }
-  const isFirst = foundBookmarks[0].userBookmarkId === bookmarkToShow.userBookmarkId;
-  const isLast = foundBookmarks.reverse()[0].userBookmarkId === bookmarkToShow.userBookmarkId;
-  // Get the message
-  const foundMessage = await prisma.message.findFirst({
-    where: {
-      id: BigInt(bookmarkToShow.messageId),
-    },
-    include: {
-      author: true,
-    },
-  });
-  if (!foundMessage) {
-    console.error('the message was not found for a bookmark');
-    return;
-  }
-  const storedMessage = standardizeMessage(foundMessage.data!.toString(), Math.floor(bookmarkToShow.updatedAt.getTime() / 1000));
   const components = [];
-  if (!isFirst) {
+  if (foundBookmarks[0].userBookmarkId !== bookmarkToShow.userBookmarkId) {
+    // is first
     components.push({
       type: ComponentType.Button,
       style: ButtonStyle.Primary,
       label: 'Back',
       custom_id: JSON.stringify({
-        t: 'search_back',
+        t: 'search',
+        mode: 'back',
         index: bookmarkToShow.userBookmarkId,
       }),
     });
   }
-  if (!isLast) {
+  if (foundBookmarks.reverse()[0].userBookmarkId !== bookmarkToShow.userBookmarkId) {
+    // is last
     components.push({
       type: ComponentType.Button,
       style: ButtonStyle.Primary,
       label: 'Forward',
       custom_id: JSON.stringify({
-        t: 'search_forward',
+        t: 'search',
+        mode: 'forward',
         index: bookmarkToShow.userBookmarkId,
       }),
     });
   }
+  const bookmarkAuthor = await prisma.user.findFirst({
+    where: {
+      id: BigInt(bookmarkToShow.message.authorId),
+    },
+  });
   await discordClient.api.interactions.editReply(interaction.application_id, interaction.token, {
-    content: `Search results for \`${query}\`.\n[Jump to message!](https://discord.com/channels/${storedMessage.guild_id || '@me'}/${
-      storedMessage.channel_id
-    }/${storedMessage.id}) (${foundBookmarks.length} result${foundBookmarks.length !== 1 ? 's' : ''})`,
-    embeds: [
-      {
-        author: {
-          name: `${foundMessage.author.username}${foundMessage.author.displayName ? ` (${foundMessage.author.displayName})` : ``}`,
-          icon_url: getUserAvatarUrl(`${foundMessage.author.id}`, foundMessage.author.avatarHash),
-        },
-        description: storedMessage.content,
-        timestamp: storedMessage.timestamp,
-        footer: {
-          text: `#${bookmarkToShow.userBookmarkId}`,
-        },
-      },
-    ],
+    content: `Search results for \`${query === '' ? '*' : query}\`. (${foundBookmarks.length} result${
+      foundBookmarks.length !== 1 ? 's' : ''
+    })`,
+    embeds: [createEmbedFromBookmark(bookmarkToShow, bookmarkToShow.message, bookmarkAuthor!, bookmarkToShow.tags)],
     components:
       components.length !== 0
         ? [
