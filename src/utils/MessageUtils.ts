@@ -57,6 +57,12 @@ export function createEmbedFromBookmark(bookmark: Bookmark, message: Message, au
     },
     description: descriptionLines.join('\n'),
     timestamp: standardizedMessage.timestamp,
+    image:
+      standardizedMessage.attachments.length === 0
+        ? undefined
+        : {
+            url: standardizedMessage.attachments[0].url,
+          },
     footer: {
       text: footerText,
     },
