@@ -54,6 +54,22 @@ export function createEmbedFromBookmark(bookmark: Bookmark, message: Message, au
       `${standardizedMessage.attachments.length} attachment${standardizedMessage.attachments.length === 1 ? '' : 's'}`,
     );
   }
+  let imageUrl: string | undefined = undefined;
+  if (!imageUrl && standardizedMessage.attachments.length !== 0) {
+    imageUrl = standardizedMessage.attachments[0].url;
+  }
+  if (!imageUrl) {
+    for (const embed of standardizedMessage.embeds) {
+      if (embed.thumbnail?.url) {
+        imageUrl = embed.thumbnail.url;
+        break;
+      }
+      if (embed.image?.url) {
+        imageUrl = embed.image.url;
+        break;
+      }
+    }
+  }
   return {
     author: {
       name: `${author.username}${author.displayName ? ` (${author.displayName})` : ``}`,
@@ -62,12 +78,11 @@ export function createEmbedFromBookmark(bookmark: Bookmark, message: Message, au
     },
     description: descriptionLines.join('\n'),
     timestamp: standardizedMessage.timestamp,
-    image:
-      standardizedMessage.attachments.length === 0
-        ? undefined
-        : {
-            url: standardizedMessage.attachments[0].url,
-          },
+    image: imageUrl
+      ? {
+          url: imageUrl,
+        }
+      : undefined,
     footer: {
       text: footerText,
     },
