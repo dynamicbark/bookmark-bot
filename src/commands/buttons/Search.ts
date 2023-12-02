@@ -7,7 +7,7 @@ import {
 } from '@discordjs/core';
 import { discordClient, prisma } from '../../index.js';
 import { getUserFromInteraction } from '../../utils/CommandUtils.js';
-import { createEmbedFromBookmark } from '../../utils/MessageUtils.js';
+import { createEmbedFromBookmark, getMessageLink } from '../../utils/MessageUtils.js';
 
 export async function searchButton(interaction: APIMessageComponentButtonInteraction) {
   const parsedCustomId = JSON.parse(interaction.data.custom_id);
@@ -83,33 +83,36 @@ export async function searchButton(interaction: APIMessageComponentButtonInterac
   if (!bookmarkToShow) {
     bookmarkToShow = foundBookmarks[0];
   }
-  const components = [];
-  if (foundBookmarks[0].userBookmarkId !== bookmarkToShow.userBookmarkId) {
-    // is first
-    components.push({
+  const components = [
+    {
       type: ComponentType.Button,
       style: ButtonStyle.Primary,
       label: 'Back',
       custom_id: JSON.stringify({
         t: 'search',
         mode: 'back',
-        index: bookmarkToShow.userBookmarkId,
+        // Loop to last
+        index: foundBookmarks[0].userBookmarkId !== bookmarkToShow.userBookmarkId ? bookmarkToShow.userBookmarkId : 100_000_000,
       }),
-    });
-  }
-  if (foundBookmarks.reverse()[0].userBookmarkId !== bookmarkToShow.userBookmarkId) {
-    // is last
-    components.push({
+    },
+    {
+      type: ComponentType.Button,
+      style: ButtonStyle.Link,
+      label: 'Jump to Message',
+      url: getMessageLink(bookmarkToShow.message),
+    },
+    {
       type: ComponentType.Button,
       style: ButtonStyle.Primary,
       label: 'Forward',
       custom_id: JSON.stringify({
         t: 'search',
         mode: 'forward',
-        index: bookmarkToShow.userBookmarkId,
+        // Loop to first
+        index: foundBookmarks.reverse()[0].userBookmarkId !== bookmarkToShow.userBookmarkId ? bookmarkToShow.userBookmarkId : -1,
       }),
-    });
-  }
+    },
+  ];
   const bookmarkAuthor = await prisma.user.findFirst({
     where: {
       id: BigInt(bookmarkToShow.message.authorId),

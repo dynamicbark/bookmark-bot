@@ -31,6 +31,13 @@ export function standardizeMessage(storedMessageString: string, _storedAt: numbe
   };
 }
 
+export function getMessageLink(message: Message): string {
+  const standardizedMessage = standardizeMessage(message.data!.toString(), 0);
+  return `https://discord.com/channels/${standardizedMessage.guild_id || '@me'}/${standardizedMessage.channel_id}/${
+    standardizedMessage.id
+  }`;
+}
+
 export function createEmbedFromBookmark(bookmark: Bookmark, message: Message, author: User, tags?: Tag[]): APIEmbed {
   const standardizedMessage = standardizeMessage(message.data!.toString(), 0);
   let footerText = `#${bookmark.userBookmarkId}`;
@@ -50,9 +57,7 @@ export function createEmbedFromBookmark(bookmark: Bookmark, message: Message, au
   return {
     author: {
       name: `${author.username}${author.displayName ? ` (${author.displayName})` : ``}`,
-      url: `https://discord.com/channels/${standardizedMessage.guild_id || '@me'}/${standardizedMessage.channel_id}/${
-        standardizedMessage.id
-      }`,
+      url: getMessageLink(message),
       icon_url: getUserAvatarUrl(`${author.id}`, author.avatarHash),
     },
     description: descriptionLines.join('\n'),

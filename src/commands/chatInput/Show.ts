@@ -4,6 +4,8 @@ import {
   APIChatInputApplicationCommandInteraction,
   ApplicationCommandOptionType,
   ApplicationCommandType,
+  ButtonStyle,
+  ComponentType,
   MessageFlags,
 } from '@discordjs/core';
 import { discordClient, prisma } from '../../index.js';
@@ -13,7 +15,7 @@ import {
   ApplicationIntegrationTypes,
   getUserFromInteraction,
 } from '../../utils/CommandUtils.js';
-import { createEmbedFromBookmark } from '../../utils/MessageUtils.js';
+import { createEmbedFromBookmark, getMessageLink } from '../../utils/MessageUtils.js';
 
 export const showChatInputCommandData: ApplicationCommand = {
   name: 'show',
@@ -80,5 +82,18 @@ export async function showChatInputCommand(interaction: APIChatInputApplicationC
   await discordClient.api.interactions.editReply(interaction.application_id, interaction.token, {
     embeds: [createEmbedFromBookmark(foundBookmark, foundBookmark.message, bookmarkAuthor!, foundBookmark.tags)],
     flags: !showOthers ? MessageFlags.Ephemeral : undefined,
+    components: [
+      {
+        type: ComponentType.ActionRow,
+        components: [
+          {
+            type: ComponentType.Button,
+            style: ButtonStyle.Link,
+            label: 'Jump to Message',
+            url: getMessageLink(foundBookmark.message),
+          },
+        ],
+      },
+    ],
   });
 }
