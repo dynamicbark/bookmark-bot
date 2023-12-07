@@ -7,6 +7,7 @@ import {
   RESTPutAPIApplicationCommandsJSONBody,
 } from '@discordjs/core';
 import { searchButton } from '../commands/buttons/Search.js';
+import { aliasChatInputCommand, aliasChatInputCommandData } from '../commands/chatInput/Alias.js';
 import { deleteChatInputCommand, deleteChatInputCommandData } from '../commands/chatInput/Delete.js';
 import { searchChatInputCommand, searchChatInputCommandData } from '../commands/chatInput/Search.js';
 import { showChatInputCommand, showChatInputCommandData } from '../commands/chatInput/Show.js';
@@ -21,6 +22,7 @@ const messageContextMenuCommands = new Map<string, Function>();
 const messageComponentButtonCommands = new Map<string, Function>();
 
 // Register the commands
+chatInputCommands.set('alias', aliasChatInputCommand);
 chatInputCommands.set('delete', deleteChatInputCommand);
 chatInputCommands.set('search', searchChatInputCommand);
 chatInputCommands.set('show', showChatInputCommand);
@@ -70,6 +72,7 @@ export async function interactionCreateListener({ data: interaction, api }: { da
 
 export async function registerCommandsOnDiscord(applicationId: string) {
   const globalCommands: ApplicationCommand[] = [
+    aliasChatInputCommandData,
     deleteChatInputCommandData,
     tagChatInputCommandData,
     searchChatInputCommandData,

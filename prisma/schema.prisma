@@ -58,6 +58,7 @@ model Bookmark {
   message        Message @relation(fields: [messageId], references: [id])
   messageId      BigInt
   tags           Tag[]
+  alias          String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

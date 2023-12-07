@@ -1,5 +1,5 @@
 import {
-  APIApplicationCommandInteractionDataIntegerOption,
+  APIApplicationCommandInteractionDataStringOption,
   APIChatInputApplicationCommandInteraction,
   ApplicationCommandOptionType,
   ApplicationCommandType,
@@ -12,6 +12,7 @@ import {
   ApplicationIntegrationTypes,
   getUserFromInteraction,
 } from '../../utils/CommandUtils.js';
+import { resolveBookmarkForUser } from '../../utils/DatabaseUtils.js';
 
 export const deleteChatInputCommandData: ApplicationCommand = {
   name: 'delete',
@@ -21,11 +22,11 @@ export const deleteChatInputCommandData: ApplicationCommand = {
   contexts: [ApplicationCommandContextType.BotDM, ApplicationCommandContextType.Guild, ApplicationCommandContextType.PrivateChannel],
   options: [
     {
-      type: ApplicationCommandOptionType.Integer,
+      type: ApplicationCommandOptionType.String,
       name: 'id',
-      description: 'Bookmark id',
+      description: 'Bookmark id or alias',
       required: true,
-      min_value: 1,
+      min_length: 1,
     },
   ],
 };
@@ -33,21 +34,16 @@ export const deleteChatInputCommandData: ApplicationCommand = {
 export async function deleteChatInputCommand(interaction: APIChatInputApplicationCommandInteraction) {
   // Get the options
   const bookmarkId = (
-    interaction.data.options!.filter((opt) => opt.name.toLowerCase() === 'id')[0] as APIApplicationCommandInteractionDataIntegerOption
+    interaction.data.options!.filter((opt) => opt.name.toLowerCase() === 'id')[0] as APIApplicationCommandInteractionDataStringOption
   ).value;
   // Defer the reply since it can take some time to process
   await discordClient.api.interactions.defer(interaction.id, interaction.token, {
     flags: MessageFlags.Ephemeral,
   });
   const user = getUserFromInteraction(interaction);
-  // Check if it has been bookmarked by the user
-  const foundBookmark = await prisma.bookmark.findFirst({
-    where: {
-      userId: BigInt(user.id),
-      userBookmarkId: bookmarkId,
-    },
-  });
-  if (!foundBookmark) {
+  // Resolve the bookmark
+  const resolvedBookmark = await resolveBookmarkForUser(user.id, bookmarkId);
+  if (!resolvedBookmark) {
     await discordClient.api.interactions.editReply(interaction.application_id, interaction.token, {
       content: 'The bookmark requested does not exist.',
       flags: MessageFlags.Ephemeral,
@@ -57,20 +53,20 @@ export async function deleteChatInputCommand(interaction: APIChatInputApplicatio
   // Delete the bookmark
   await prisma.bookmark.delete({
     where: {
-      id: foundBookmark.id,
+      id: resolvedBookmark.id,
     },
   });
   // Check if the message is linked to any other bookmarks
   const linkedMessagesCount = await prisma.bookmark.count({
     where: {
-      messageId: foundBookmark.id,
+      messageId: resolvedBookmark.id,
     },
   });
   // If there are no bookmarks linked to the message
   if (linkedMessagesCount < 1) {
     await prisma.message.delete({
       where: {
-        id: foundBookmark.messageId,
+        id: resolvedBookmark.messageId,
       },
     });
   }

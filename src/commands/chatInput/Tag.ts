@@ -1,5 +1,4 @@
 import {
-  APIApplicationCommandInteractionDataIntegerOption,
   APIApplicationCommandInteractionDataStringOption,
   APIChatInputApplicationCommandInteraction,
   ApplicationCommandOptionType,
@@ -13,7 +12,7 @@ import {
   ApplicationIntegrationTypes,
   getUserFromInteraction,
 } from '../../utils/CommandUtils.js';
-import { upsertTag } from '../../utils/DatabaseUtils.js';
+import { resolveBookmarkForUser, upsertTag } from '../../utils/DatabaseUtils.js';
 
 export const tagChatInputCommandData: ApplicationCommand = {
   name: 'tag',
@@ -23,11 +22,11 @@ export const tagChatInputCommandData: ApplicationCommand = {
   contexts: [ApplicationCommandContextType.BotDM, ApplicationCommandContextType.Guild, ApplicationCommandContextType.PrivateChannel],
   options: [
     {
-      type: ApplicationCommandOptionType.Integer,
+      type: ApplicationCommandOptionType.String,
       name: 'id',
-      description: 'Bookmark id',
+      description: 'Bookmark id or alias',
       required: true,
-      min_value: 1,
+      min_length: 1,
     },
     {
       type: ApplicationCommandOptionType.String,
@@ -42,7 +41,7 @@ export const tagChatInputCommandData: ApplicationCommand = {
 export async function tagChatInputCommand(interaction: APIChatInputApplicationCommandInteraction) {
   // Get the options
   const bookmarkId = (
-    interaction.data.options!.filter((opt) => opt.name.toLowerCase() === 'id')[0] as APIApplicationCommandInteractionDataIntegerOption
+    interaction.data.options!.filter((opt) => opt.name.toLowerCase() === 'id')[0] as APIApplicationCommandInteractionDataStringOption
   ).value;
   const tag = (
     interaction.data.options!.filter((opt) => opt.name.toLowerCase() === 'tag')[0] as APIApplicationCommandInteractionDataStringOption
@@ -53,16 +52,8 @@ export async function tagChatInputCommand(interaction: APIChatInputApplicationCo
   });
   const user = getUserFromInteraction(interaction);
   // Check if it has been bookmarked by the user
-  const foundBookmark = await prisma.bookmark.findFirst({
-    where: {
-      userId: BigInt(user.id),
-      userBookmarkId: bookmarkId,
-    },
-    include: {
-      tags: true,
-    },
-  });
-  if (!foundBookmark) {
+  const resolvedBookmark = await resolveBookmarkForUser(user.id, bookmarkId);
+  if (!resolvedBookmark) {
     await discordClient.api.interactions.editReply(interaction.application_id, interaction.token, {
       content: 'The bookmark requested does not exist.',
       flags: MessageFlags.Ephemeral,
@@ -85,11 +76,11 @@ export async function tagChatInputCommand(interaction: APIChatInputApplicationCo
     return;
   }
   let tagAdded = false;
-  if (foundBookmark.tags.filter((t) => t.id === foundTag.id).length !== 0) {
+  if (resolvedBookmark.tags.filter((t) => t.id === foundTag.id).length !== 0) {
     // Remove the tag
     await prisma.bookmark.update({
       where: {
-        id: foundBookmark.id,
+        id: resolvedBookmark.id,
       },
       data: {
         tags: {
@@ -104,7 +95,7 @@ export async function tagChatInputCommand(interaction: APIChatInputApplicationCo
     // Add the tag
     await prisma.bookmark.update({
       where: {
-        id: foundBookmark.id,
+        id: resolvedBookmark.id,
       },
       data: {
         tags: {

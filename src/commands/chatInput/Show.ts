@@ -1,6 +1,6 @@
 import {
   APIApplicationCommandInteractionDataBooleanOption,
-  APIApplicationCommandInteractionDataIntegerOption,
+  APIApplicationCommandInteractionDataStringOption,
   APIChatInputApplicationCommandInteraction,
   ApplicationCommandOptionType,
   ApplicationCommandType,
@@ -15,6 +15,7 @@ import {
   ApplicationIntegrationTypes,
   getUserFromInteraction,
 } from '../../utils/CommandUtils.js';
+import { resolveBookmarkForUser } from '../../utils/DatabaseUtils.js';
 import { createEmbedFromBookmark, getMessageLink } from '../../utils/MessageUtils.js';
 
 export const showChatInputCommandData: ApplicationCommand = {
@@ -25,11 +26,11 @@ export const showChatInputCommandData: ApplicationCommand = {
   contexts: [ApplicationCommandContextType.BotDM, ApplicationCommandContextType.Guild, ApplicationCommandContextType.PrivateChannel],
   options: [
     {
-      type: ApplicationCommandOptionType.Integer,
+      type: ApplicationCommandOptionType.String,
       name: 'id',
-      description: 'Bookmark id',
+      description: 'Bookmark id or alias',
       required: true,
-      min_value: 1,
+      min_length: 1,
     },
     {
       type: ApplicationCommandOptionType.Boolean,
@@ -43,7 +44,7 @@ export const showChatInputCommandData: ApplicationCommand = {
 export async function showChatInputCommand(interaction: APIChatInputApplicationCommandInteraction) {
   // Get the options
   const bookmarkId = (
-    interaction.data.options!.filter((opt) => opt.name.toLowerCase() === 'id')[0] as APIApplicationCommandInteractionDataIntegerOption
+    interaction.data.options!.filter((opt) => opt.name.toLowerCase() === 'id')[0] as APIApplicationCommandInteractionDataStringOption
   ).value;
   const showOthers =
     (
@@ -56,18 +57,9 @@ export async function showChatInputCommand(interaction: APIChatInputApplicationC
     flags: !showOthers ? MessageFlags.Ephemeral : undefined,
   });
   const user = getUserFromInteraction(interaction);
-  // Find the bookmark to show
-  const foundBookmark = await prisma.bookmark.findFirst({
-    where: {
-      userId: BigInt(user.id),
-      userBookmarkId: bookmarkId,
-    },
-    include: {
-      tags: true,
-      message: true,
-    },
-  });
-  if (!foundBookmark) {
+  // Resolve the bookmark
+  const resolvedBookmark = await resolveBookmarkForUser(user.id, bookmarkId);
+  if (!resolvedBookmark) {
     await discordClient.api.interactions.editReply(interaction.application_id, interaction.token, {
       content: 'The bookmark requested does not exist.',
       flags: !showOthers ? MessageFlags.Ephemeral : undefined,
@@ -76,11 +68,11 @@ export async function showChatInputCommand(interaction: APIChatInputApplicationC
   }
   const bookmarkAuthor = await prisma.user.findFirst({
     where: {
-      id: BigInt(foundBookmark.message.authorId),
+      id: BigInt(resolvedBookmark.message.authorId),
     },
   });
   await discordClient.api.interactions.editReply(interaction.application_id, interaction.token, {
-    embeds: [createEmbedFromBookmark(foundBookmark, foundBookmark.message, bookmarkAuthor!, foundBookmark.tags)],
+    embeds: [createEmbedFromBookmark(resolvedBookmark, resolvedBookmark.message, bookmarkAuthor!, resolvedBookmark.tags)],
     flags: !showOthers ? MessageFlags.Ephemeral : undefined,
     components: [
       {
@@ -90,7 +82,7 @@ export async function showChatInputCommand(interaction: APIChatInputApplicationC
             type: ComponentType.Button,
             style: ButtonStyle.Link,
             label: 'Jump to Message',
-            url: getMessageLink(foundBookmark.message),
+            url: getMessageLink(resolvedBookmark.message),
           },
         ],
       },
