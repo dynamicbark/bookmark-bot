@@ -41,13 +41,16 @@ export async function upsertMessage(
   delete message.activity;
   delete message.application;
   delete message.referenced_message;
+  delete message.interaction_metadata;
   delete message.interaction;
   delete message.thread;
   delete message.components;
+  delete message.sticker_items;
   delete message.stickers;
   delete message.position;
   delete message.role_subscription_data;
   delete message.resolved;
+  delete message.call;
   // upsert the database
   await prisma.message.upsert({
     where: {

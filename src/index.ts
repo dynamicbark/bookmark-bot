@@ -1,4 +1,4 @@
-import { Client, GatewayDispatchEvents, GatewayReadyDispatchData, WithIntrinsicProps } from '@discordjs/core';
+import { Client, GatewayDispatchEvents } from '@discordjs/core';
 import { REST } from '@discordjs/rest';
 import { WebSocketManager } from '@discordjs/ws';
 import { PrismaClient } from '@prisma/client';
@@ -18,7 +18,7 @@ const discordGateway = new WebSocketManager({
 export const discordClient = new Client({ rest: discordRest, gateway: discordGateway });
 
 discordClient.on(GatewayDispatchEvents.InteractionCreate, interactionCreateListener);
-discordClient.once(GatewayDispatchEvents.Ready, async (readyDispatchData: WithIntrinsicProps<GatewayReadyDispatchData>) => {
+discordClient.once(GatewayDispatchEvents.Ready, async (readyDispatchData) => {
   if (process.env.REGISTER_COMMANDS_ON_DISCORD == 'true') {
     await registerCommandsOnDiscord(readyDispatchData.data.application.id);
   }

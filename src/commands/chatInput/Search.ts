@@ -4,25 +4,22 @@ import {
   APIMessageActionRowComponent,
   ApplicationCommandOptionType,
   ApplicationCommandType,
+  ApplicationIntegrationType,
   ButtonStyle,
   ComponentType,
+  InteractionContextType,
   MessageFlags,
 } from '@discordjs/core';
 import { discordClient, prisma } from '../../index.js';
-import {
-  ApplicationCommand,
-  ApplicationCommandContextType,
-  ApplicationIntegrationTypes,
-  getUserFromInteraction,
-} from '../../utils/CommandUtils.js';
+import { ApplicationCommand, getUserFromInteraction } from '../../utils/CommandUtils.js';
 import { createEmbedFromBookmark, getMessageLink } from '../../utils/MessageUtils.js';
 
 export const searchChatInputCommandData: ApplicationCommand = {
   name: 'search',
   description: 'Search for a bookmark.',
   type: ApplicationCommandType.ChatInput,
-  integration_types: [ApplicationIntegrationTypes.UserInstall],
-  contexts: [ApplicationCommandContextType.BotDM, ApplicationCommandContextType.Guild, ApplicationCommandContextType.PrivateChannel],
+  integration_types: [ApplicationIntegrationType.UserInstall],
+  contexts: [InteractionContextType.BotDM, InteractionContextType.Guild, InteractionContextType.PrivateChannel],
   options: [
     {
       type: ApplicationCommandOptionType.String,

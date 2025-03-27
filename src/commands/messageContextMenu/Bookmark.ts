@@ -1,18 +1,19 @@
-import { APIMessageApplicationCommandInteraction, ApplicationCommandType, MessageFlags } from '@discordjs/core';
-import { discordClient, prisma } from '../../index.js';
 import {
-  ApplicationCommand,
-  ApplicationCommandContextType,
-  ApplicationIntegrationTypes,
-  getUserFromInteraction,
-} from '../../utils/CommandUtils.js';
+  APIMessageApplicationCommandInteraction,
+  ApplicationCommandType,
+  ApplicationIntegrationType,
+  InteractionContextType,
+  MessageFlags,
+} from '@discordjs/core';
+import { discordClient, prisma } from '../../index.js';
+import { ApplicationCommand, getUserFromInteraction } from '../../utils/CommandUtils.js';
 import { upsertMessage, upsertTag, upsertUser } from '../../utils/DatabaseUtils.js';
 
 export const bookmarkMessageContextMenuData: ApplicationCommand = {
   name: 'Bookmark',
   type: ApplicationCommandType.Message,
-  integration_types: [ApplicationIntegrationTypes.UserInstall],
-  contexts: [ApplicationCommandContextType.BotDM, ApplicationCommandContextType.Guild, ApplicationCommandContextType.PrivateChannel],
+  integration_types: [ApplicationIntegrationType.UserInstall],
+  contexts: [InteractionContextType.BotDM, InteractionContextType.Guild, InteractionContextType.PrivateChannel],
 };
 
 export async function bookmarkMessageContextMenu(interaction: APIMessageApplicationCommandInteraction) {
