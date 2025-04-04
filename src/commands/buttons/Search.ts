@@ -22,16 +22,7 @@ export async function searchButton(interaction: APIMessageComponentButtonInterac
   await discordClient.api.interactions.deferMessageUpdate(interaction.id, interaction.token, {});
   //
   const user = getUserFromInteraction(interaction);
-  // Get all the bookmarks for a user
-  const bookmarks = await prisma.bookmark.findMany({
-    where: {
-      userId: BigInt(user.id),
-    },
-    include: {
-      tags: true,
-      message: true,
-    },
-  });
+  // Get the tags to use for search
   const matchStartingTags = /^#([a-z0-9:_()]{1,}) ?(?:(?:.|\n)*)/;
   const tagsToSearch = new Set<string>();
   let updatedQuery = query.trim();
@@ -44,18 +35,34 @@ export async function searchButton(interaction: APIMessageComponentButtonInterac
     tagsToSearch.add(foundTag);
     updatedQuery = updatedQuery.substring(`#${foundTag}`.length).trim();
   }
+  // Get all bookmarks for a user that have the tags specified
+  const bookmarks = await prisma.bookmark.findMany({
+    where: {
+      userId: BigInt(user.id),
+      AND:
+        tagsToSearch.size !== 0
+          ? [...tagsToSearch].map((tagName) => {
+              return {
+                tags: {
+                  some: {
+                    userId: BigInt(user.id),
+                    name: tagName,
+                  },
+                },
+              };
+            })
+          : undefined,
+    },
+    include: {
+      tags: true,
+      message: true,
+    },
+    orderBy: {
+      userBookmarkId: 'asc',
+    },
+  });
   const foundBookmarks = [];
   for (const bookmark of bookmarks) {
-    let shouldStop = false;
-    for (const tagName of tagsToSearch) {
-      if (!bookmark.tags.find((t) => t.name === tagName.toLowerCase())) {
-        shouldStop = true;
-        break;
-      }
-    }
-    if (shouldStop) {
-      continue;
-    }
     const messageData = JSON.parse(bookmark.message.data!.toString());
     if (messageData.content.toLowerCase().includes(updatedQuery)) {
       foundBookmarks.push(bookmark);

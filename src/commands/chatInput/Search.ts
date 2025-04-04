@@ -54,23 +54,15 @@ export async function searchChatInputCommand(interaction: APIChatInputApplicatio
       interaction.data.options?.filter((opt) => opt.name.toLowerCase() === 'tags')[0] as
         | APIApplicationCommandInteractionDataStringOption
         | undefined
-    )?.value.trim() || '';
+    )?.value
+      .replaceAll('#', '')
+      .trim() || '';
   // Defer the reply since it can take some time to process
   await discordClient.api.interactions.defer(interaction.id, interaction.token, {
     flags: MessageFlags.Ephemeral,
   });
   const user = getUserFromInteraction(interaction);
-  // Get all the bookmarks for a user
-  const bookmarks = await prisma.bookmark.findMany({
-    where: {
-      userId: BigInt(user.id),
-    },
-    include: {
-      tags: true,
-      message: true,
-    },
-  });
-  //const matchStartingTags = /^#([a-z0-9:_()]{1,}) ?(?:(?:.|\n)*)/;
+  // Get the tags to use for search
   const tagsToSearch = new Set<string>();
   for (let tagName of tagsOption.split(' ')) {
     tagName = tagName.toLowerCase().trim();
@@ -78,18 +70,34 @@ export async function searchChatInputCommand(interaction: APIChatInputApplicatio
       tagsToSearch.add(tagName);
     }
   }
+  // Get all bookmarks for a user that have the tags specified
+  const bookmarks = await prisma.bookmark.findMany({
+    where: {
+      userId: BigInt(user.id),
+      AND:
+        tagsToSearch.size !== 0
+          ? [...tagsToSearch].map((tagName) => {
+              return {
+                tags: {
+                  some: {
+                    userId: BigInt(user.id),
+                    name: tagName,
+                  },
+                },
+              };
+            })
+          : undefined,
+    },
+    include: {
+      tags: true,
+      message: true,
+    },
+    orderBy: {
+      userBookmarkId: 'asc',
+    },
+  });
   const foundBookmarks = [];
   for (const bookmark of bookmarks) {
-    let shouldStop = false;
-    for (const tagName of tagsToSearch) {
-      if (!bookmark.tags.find((t) => t.name === tagName)) {
-        shouldStop = true;
-        break;
-      }
-    }
-    if (shouldStop) {
-      continue;
-    }
     const messageData = JSON.parse(bookmark.message.data!.toString());
     if (messageData.content.toLowerCase().includes(queryOption)) {
       foundBookmarks.push(bookmark);
